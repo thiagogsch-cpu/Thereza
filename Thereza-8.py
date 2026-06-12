@@ -202,7 +202,7 @@ def gerar_pdf(lista_dados, analista, data_hora, dados_cca=None):
     elementos.append(Paragraph("Parecer Técnico e Diagnóstico Metrológico", section_heading))
     for row in lista_dados:
         texto_parecer = f"<b>{row['Amostra']}:</b> {row['Parecer']}"
-        elementos.append(Paragraph(texto_cca if 'texto_cca' in locals() else texto_parecer, parecer_style))
+        elementos.append(Paragraph(texto_parecer, parecer_style))
         
     if inclui_cca:
         elementos.append(Paragraph("Parecer de Avaliação Legal de Risco (CCα)", section_heading))
@@ -217,9 +217,9 @@ def gerar_pdf(lista_dados, analista, data_hora, dados_cca=None):
 # --- SIDEBAR ATUALIZADA COM OS NOVOS COMPOSTOS ---
 with st.sidebar:
     if os.path.exists("logo_thereza.png"):
-        st.image("logo_thereza.png", width='stretch')
+        st.image("logo_thereza.png", width="stretch")
     elif os.path.exists("logo_thereza.png.png"):
-        st.image("logo_thereza.png.png", width='stretch')
+        st.image("logo_thereza.png.png", width="stretch")
     else:
         st.markdown("<h2 style='color:#ffffff; text-align:center; font-weight:bold;'>THEREZA</h2>", unsafe_allow_html=True)
         st.caption("Cálculo de Incerteza de Medição")
@@ -232,7 +232,6 @@ with st.sidebar:
     if metodo == "Glifosato":
         opcoes_composto = ["Glifosato", "Glufosinato"]
     else:
-        # Lista expandida com os 18 compostos informados para o método Multirresíduos
         opcoes_composto = [
             "Abamectina", "Atrazina", "Azoxistrobina", "Clorantraniliprole", 
             "Clorpirifós", "Clorpirifós-metílico", "Clotianidina", "Ciproconazol", 
@@ -276,22 +275,51 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 
-# Verificação estrutural de troca do composto selecionado e inicialização da tabela de parâmetros
+# --- INTERCEPTAÇÃO E ATRIBUIÇÃO DE VALORES PADRÃO ---
 if "composto_atual" not in st.session_state or st.session_state.composto_atual != composto:
     st.session_state.composto_atual = composto
+    
+    # Tenta carregar o arquivo CSV se ele existir na nuvem
     df_p = carregar_dados(composto, "params")
+    
+    # Se NÃO existir o arquivo CSV, define os valores padrão corporativos (Fallback Inteligente)
     if df_p is None:
-        df_p = pd.DataFrame({"Parametro": [
-            "0. LOQ do Método (mg/Kg)",
-            "1. Balança - U(tara)", "1. Balança - U(pesagem)", "1. Balança - k calibração",
-            "2. Padrão - Pureza (%)", "2. Padrão - U(padrão) certified",
-            "3. Vse - Volume solução extratora (mL)", "3. Vse - U(pipeta)",
-            "4. Repetibilidade - RSD (%)", "4. Repetibilidade - Graus Liberdade",
-            "5. Vol IS (mL)", "5. Vol IS - U(pipetador)",
-            "6. Vol Amostra (mL)", "6. Vol Amostra - U(pipetador)",
-            "7. Vf - Volume Final (mL)", "7. Vf - U(balão)"
-        ], "Valor": [0.02] + [0.0] * 15})
+        # Dicionário de valores padrão gerais para o Método Multirresíduos
+        valores_padrao = {
+            "0. LOQ do Método (mg/Kg)": 0.02,
+            "1. Balança - U(tara)": 0.0001,
+            "1. Balança - U(pesagem)": 0.0001,
+            "1. Balança - k calibração": 2.0,
+            "2. Padrão - Pureza (%)": 99.5,
+            "2. Padrão - U(padrão) certified": 0.02,
+            "3. Vse - Volume solução extratora (mL)": 10.0,
+            "3. Vse - U(pipeta)": 0.02,
+            "4. Repetibilidade - RSD (%)": 5.4,
+            "4. Repetibilidade - Graus Liberdade": 26.0,
+            "5. Vol IS (mL)": 0.05,
+            "5. Vol IS - U(pipetador)": 0.001,
+            "6. Vol Amostra (mL)": 0.45,
+            "6. Vol Amostra - U(pipetador)": 0.005,
+            "7. Vf - Volume Final (mL)": 0.50,
+            "7. Vf - U(balão)": 0.005
+        }
+        
+        # Exemplo de customização por analito específico
+        if composto == "Clorpirifós":
+            valores_padrao["4. Repetibilidade - RSD (%)"] = 4.8
+            
+        elif composto == "Glifosato":
+            valores_padrao["0. LOQ do Método (mg/Kg)"] = 0.05
+            valores_padrao["3. Vse - Volume solução extratora (mL)"] = 5.0
+            
+        # Monta o DataFrame estruturado usando os valores definidos acima
+        lista_parametros = list(valores_padrao.keys())
+        lista_valores = list(valores_padrao.values())
+        df_p = pd.DataFrame({"Parametro": lista_parametros, "Valor": lista_valores})
+        
     st.session_state.df_params = df_p
+    
+    # Gerenciamento da Curva
     df_c = carregar_dados(composto, "curva")
     st.session_state.dados_curva = df_c if df_c is not None else pd.DataFrame({"Conc (mg/L)": [0.0]*6, "Resposta": [0.0]*6})
     st.session_state.reg_results = None
@@ -550,7 +578,7 @@ if st.button("🚀 Gerar Avaliação de Incerteza"):
             componente_max = df_detalhado.loc[idx_max, "Grandeza"]
             
             if componente_max == "Repetitividade":
-                texto_melhoria = "A repetitividade histórica é o principal fator no balanço de incerteza."
+                texto_melhoria = "A repetitividade histórica é o principal factor no balanço de incerteza."
             elif componente_max in ["Resposta", "INTERCEPTO", "SLOPE"]:
                 texto_melhoria = "A variabilidade instrumental domina o erro. Recomenda-se aumentar as replicatas."
             else:
@@ -632,7 +660,7 @@ if st.session_state.mapa_incertezas:
                     <strong>Incerteza padrão combinada, u<sub>c</sub>:</strong> {m_data['uc']:.6f}<br>
                     <strong>Graus de liberdade efetivos (v<sub>eff</sub>):</strong> {m_data['v_eff_trunc']}<br>
                     <strong>Fator de abrangência k:</strong> {m_data['k_dinamico']:.3f} (calculado via Welch-Satterthwaite)<br>
-                    <strong>Nota Importante:</strong> O valor da incerteza para a Resposta Analítica ({m_data['u_resposta_dinamica']:.4f}) reflete o desvio padrão calculado a partir das {m_data['n_reps_atual']} réplicas desta amostra.
+                    <strong>Nota Importante:</strong> O value da incerteza para a Resposta Analítica ({m_data['u_resposta_dinamica']:.4f}) reflete o desvio padrão calculado a partir das {m_data['n_reps_atual']} réplicas desta amostra.
                 </p>
                 """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -739,7 +767,7 @@ if ativar_cca:
                     }
                 st.session_state.dados_cca_report = mapa_cca_resultados
 
-if activated_cca := ativar_cca and st.session_state.dados_cca_report:
+if ativar_cca and st.session_state.dados_cca_report:
     st.markdown("### 📋 Resultados e Parecer de Capacidade de Decisão")
     for am_nome, res_cca in st.session_state.dados_cca_report.items():
         st.markdown(f"""
